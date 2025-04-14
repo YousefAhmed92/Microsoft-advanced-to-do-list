@@ -1,0 +1,62 @@
+﻿@page "/reminders"
+@inject Services.TaskService _TaskService
+@inject Services.NotifierBackgroundService _reminderservice;
+@using Radzen;
+@using Radzen.Blazor;
+
+<h3>Tasks Notifiers</h3>
+@if (reminders == null)
+{
+    <p>Loading notefiers...</p>
+}
+else if (!reminders.Any())
+{
+    <p>No notefiers.</p>
+}
+else
+{
+    <ul>
+        @foreach (var task in reminders)
+        {
+            <div class="Message">
+                <span><h2 style="color:white ; text-align:center">Notifier</h2> task @task.TaskName has @((task.Deadline - DateTime.Now).Value.TotalDays) days for its deadline </span>
+            </div>
+            @*             <strong>@task.TaskName</strong> - Days left to deadline: @((task.Deadline - DateTime.Now).TotalDays)
+ *@     }
+    </ul>
+}
+
+<style>
+    .Message {
+        background-color: cadetblue;
+        width: 600px;
+        height: 100px;
+        color: white;
+        margin: 50px,auto;
+        border-radius: 5px;
+        padding: 20px;
+        text-align: center;
+        font-size: medium;
+        font-weight: bold
+    }
+</style>
+
+@code
+{
+    @code
+    {
+        private List<Models.Tasks> reminders = new();
+
+        protected override async Task OnInitializedAsync()
+        {
+            Console.WriteLine("🔍 Fetching task reminders...");
+            reminders = await _TaskService.GetTasksToRemind();
+            Console.WriteLine($"📌 Reminders Count: {reminders.Count}");
+
+            foreach (var task in reminders)
+            {
+                Console.WriteLine($"📌 Task: {task.TaskName}, Days Left: {((task.Deadline - DateTime.Now).Value.TotalMinutes)}");
+            }
+        }
+    }
+}

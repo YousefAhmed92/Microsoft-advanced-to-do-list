@@ -1,0 +1,822 @@
+﻿@page "/InMyDayTasks";
+@inject Services.TaskService _service
+@inject NavigationManager _NavigationManager
+@inject NotificationService _NotificationService
+@inject DialogService _DialogService
+@inject Helper.MyTasksDBContext _context ;
+@inject Services.SubTaskService _SubTaskService
+
+@using Radzen.Blazor;
+@using Radzen;
+<h5 style="font-weight:bolder; text-align:center">My Day</h5>
+
+@if (IsLoading)
+{
+    <RadzenAlert Style="margin: 20px">
+        <RadzenIcon Icon="hourglass_empty" Style="margin-right: 10px" />
+        Loading task details...
+    </RadzenAlert>
+}
+else if (!tasks.Any())
+{
+    <h2>There are no tasks to display</h2>
+}
+else
+{
+
+    <RadzenCardGroup>
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="1rem" Style="margin-bottom: 1rem;">
+        </RadzenStack>
+
+        <RadzenDataGrid RowUpdate="@UpdateRow" @ref="grid" Data="@tasks" TItem="Models.Tasks" AllowPaging="true" PageSize="5" EditMode="DataGridEditMode.Single">
+            <Columns>
+                <RadzenDataGridColumn TItem="Models.Tasks" Property="TaskName" Title="Task Name">
+
+                    <Template Context="task">
+                        <input class="task-checkbox" type="checkbox"
+                               checked="@(task.TaskCompletionStatus == "Submitted Within Deadline" || task.TaskCompletionStatus == "Submitted After Deadline" )"
+                               @onchange="@(async (e) => await ToggleTaskCompletion(task))" />
+                        @if (task.TaskCompletionStatus == "Submitted Within Deadline" || task.TaskCompletionStatus == "Submitted After Deadline")
+                        {
+                            <a style="cursor:pointer; text-decoration:line-through; width:100%" @onclick="(()=>TaskInfo(task.TaskId))"> @task.TaskName</a>
+
+                        }
+                        else
+                        {
+                            <a style="cursor:pointer; width:100%" @onclick="(()=>TaskInfo(task.TaskId))"> @task.TaskName</a>
+
+                        }
+
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="Models.Tasks" Title="Due Date" Property="Deadline">
+                    <Template Context="task">
+                        <div style="cursor:pointer; width:100%; height:100%" @onclick="(()=>{StartEdit(task);})">
+                            @(task.Deadline != null ? task.Deadline : "add deadline")
+                        </div>
+                    </Template>
+                    <EditTemplate Context="task">
+                        <RadzenDatePicker @bind-Value="task.Deadline" Style="width: 100%" />
+                    </EditTemplate>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="Models.Tasks" Title="Important" Width="100px">
+                    <Template Context="task">
+                        <RadzenButton Text="@(task.PriorityId == 1 ? "★" : "☆")"
+                                      Click="@(() => ToggleTaskImportance(task))"
+                                      class="star-button"
+                                      ButtonStyle="ButtonStyle.Light" />
+
+                    </Template>
+                </RadzenDataGridColumn>
+
+            </Columns>
+            <FooterTemplate>
+                <b>Total Tasks: @tasks.Count()</b>
+            </FooterTemplate>
+        </RadzenDataGrid>
+    </RadzenCardGroup>
+}
+@if (showSidebar && ExistingTask != null)
+{
+    <div class="task-sidebar">
+        <div class="sidebar-header">
+            <h3>Task Details</h3>
+            <button class="close-btn" @onclick="CloseSidebar">×</button>
+        </div>
+        <div class="sidebar-content">
+
+            <EditForm FormName="updatetask" Model="@ExistingTask" OnValidSubmit="UpdateTask">
+                <ValidationSummary />
+                <DataAnnotationsValidator />
+                <RadzenCard Style="margin-bottom: 100px">
+                    <RadzenRow Style="margin:10px">
+                        <RadzenColumn SizeMD="12">
+                            <input type="checkbox"
+                            style="margin-right:10px" class="task-checkbox"
+                            checked="@(ExistingTask.TaskCompletionStatus == "Submitted Within Deadline" || ExistingTask.TaskCompletionStatus == "Submitted After Deadline" )"
+                            @onchange="@(async (e) => await ToggleTaskCompletion(ExistingTask))" />
+                            <span style="font-weight:bold">
+                                @ExistingTask.TaskName
+                            </span>
+
+                        </RadzenColumn>
+                    </RadzenRow>
+
+                    <RadzenRow Style="margin:10px">
+                        <RadzenColumn SizeMD="12">
+                            @if (!ExistingTask.InMyDay)
+                            {
+                                <RadzenButton class="button" Text="Add To My Day"
+                                              Click="@(() => MyDayToggle(ExistingTask))" />
+
+                            }
+                            else
+                            {
+                                <RadzenButton class="button" Text="Remove From My Day" ButtonStyle="ButtonStyle.Light"
+                                              Click="@(() => MyDayToggle(ExistingTask))" />
+                            }
+
+                        </RadzenColumn>
+                    </RadzenRow>
+
+                    <RadzenRow Style="margin:10px">
+                        <RadzenColumn SizeMD="12">
+                            <RadzenDatePicker Placeholder="DeadLine" @bind-Value="ExistingTask.Deadline" Style="width:250px" />
+                        </RadzenColumn>
+                    </RadzenRow>
+
+
+                    <RadzenRow Style="margin:10px">
+                        <RadzenColumn SizeMD="12">
+                            @if (AllStatus != null && AllStatus.Any())
+                            {
+                                <RadzenDropDown Data="@AllStatus"
+                                                AllowFiltering="true" AllowClear="true"
+                                                @bind-Value="ExistingTask.StatusId"
+                                                TextProperty="StatusName"
+                                                ValueProperty="StatusId"
+                                                Placeholder="Select Status"
+                                                Style="width:250px">
+                                    <HeaderTemplate>
+                                        <div class="dropdown-placeholder">Select Status</div>
+                                        <hr />
+                                    </HeaderTemplate>
+                                </RadzenDropDown>
+
+                            }
+                            else
+                            {
+                                <p>Loading statuses...</p>
+                            }
+                        </RadzenColumn>
+                    </RadzenRow>
+
+                    <RadzenRow Style="margin:10px">
+                        <RadzenColumn SizeMD="12">
+                            <RadzenDropDown Data="@AllPriorities"
+                                            Placeholder="Select Priority"
+                                            AllowClear="true"
+                                            AllowFiltering="true"
+                                            @bind-Value="ExistingTask.PriorityId"
+                                            TextProperty="PriorityName"
+                                            ValueProperty="PriorityId"
+                                            Style="width:250px">
+                                <HeaderTemplate>
+                                    <div class="dropdown-placeholder">Select Priority</div>
+                                    <hr />
+
+                                </HeaderTemplate>
+                            </RadzenDropDown>
+                        </RadzenColumn>
+                    </RadzenRow>
+
+                    <RadzenRow Style="margin:10px">
+                        <RadzenColumn SizeMD="12">
+                            <RadzenDropDown Data="@NotifierOptions"
+                            @bind-Value="ExistingTask.NotifierInHours"
+                            ValueProperty="Value"
+                            TextProperty="DisplayText"
+                            Placeholder="Select Notifier"
+                            Style="width:250px" />
+
+                        </RadzenColumn>
+                    </RadzenRow>
+                    <RadzenRow Style="margin:10px">
+                        <RadzenColumn SizeMD="12">
+                            <RadzenTextArea Placeholder="Task Notes" @bind-Value="@ExistingTask.TaskDescription" />
+                        </RadzenColumn>
+                    </RadzenRow>
+
+                    <RadzenRow Style="margin:0px">
+                        <RadzenColumn SizeMD="12">
+                            <RadzenLabel />
+                            @if (ExistingTask?.Subtasks != null && ExistingTask.Subtasks.Any())
+                            {
+                                @foreach (var subtask in ExistingTask.Subtasks.ToList())
+                                {
+                                    <RadzenRow Style="margin:1px">
+                                        <RadzenColumn SizeMD="12">
+                                            <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Click="() => DeleteExistingSubTask(subtask.SubTaskId)" />
+                                            <RadzenTextBox @bind-Value="subtask.SubTaskName" />
+                                        </RadzenColumn>
+                                    </RadzenRow>
+                                }
+                            }
+                            @foreach (var subtask in NewSubtasks)
+                            {
+                                <RadzenRow Style="margin:1px">
+                                    <RadzenColumn SizeMD="8">
+                                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Secondary" Click="() => RemoveNewSubtask(subtask)" />
+                                        <RadzenTextBox @bind-Value="subtask.SubTaskName" />
+                                    </RadzenColumn>
+                                </RadzenRow>
+                            }
+                            <RadzenButton Text="Add Subtask" ButtonStyle="ButtonStyle.Primary" Click="AddNewSubtask" Style="margin-top:10px" />
+                        </RadzenColumn>
+                    </RadzenRow>
+                    <div class="form-footer" style="margin-top:50px; text-align:center">
+                        <RadzenButton ButtonType="ButtonType.Submit"
+                        Text="Save Changes"
+                        Icon="save"
+                        ButtonStyle="ButtonStyle.Primary"
+                        IsBusy="@IsBusy"
+                        Disabled="@IsBusy" />
+                    </div>
+                </RadzenCard>
+
+
+                <div style="margin-top: 20px">
+                    <RadzenButton ButtonStyle="ButtonStyle.Secondary"
+                    Icon="delete"
+                    Click="@(()=>DeleteTask(ExistingTask))"
+                    Style="margin-right:10px" />
+
+                    <span style="margin-top:80px">Task Created At @ExistingTask.CreatedAt</span>
+
+                </div>
+            </EditForm>
+            <div class="container">
+                <p id="countdown" class="countclass"></p>
+
+            </div>
+        </div>
+    </div>
+}
+
+<EditForm FormName="AddTask" Model="@newTask" OnValidSubmit="AddTodo">
+    <DataAnnotationsValidator />
+
+    <ValidationSummary />
+
+    <RadzenStack>
+
+        <RadzenCard>
+
+            <RadzenRow Style="margin:15px">
+
+                <RadzenColumn SizeMD="3">
+                    <RadzenLabel Text="task name" />
+                </RadzenColumn>
+
+                <RadzenColumn SizeMD="9">
+                    <RadzenTextBox @bind-Value="newTask.TaskName">
+                        <RadzenRequiredValidator />
+                    </RadzenTextBox>
+                </RadzenColumn>
+
+            </RadzenRow>
+
+            <RadzenButton ButtonType="ButtonType.Submit" Text="Add Task" Icon="add_circle" ButtonStyle="ButtonStyle.Primary" Style="width: 100%;">
+                @if (IsLoading)
+                {
+                    <RadzenIcon Icon="refresh" Spin="true" Style="margin-right: 8px;" />
+                    <span>Adding Task...</span>
+                }
+                else
+                {
+                    <span>Add Task</span>
+                }
+            </RadzenButton>
+
+        </RadzenCard>
+
+    </RadzenStack>
+
+</EditForm>
+
+
+<style>
+    .dropdown-placeholder {
+        color: black;
+        padding: 3px;
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+
+    .task-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+    margin-right: 8px;
+    }
+
+    .task-checkbox:checked {
+    background-color: #4CAF50;
+    border-color: #4CAF50;
+    }
+
+    .task-checkbox:checked::after {
+    content: "✓";
+    position: absolute;
+    color: white;
+    font-size: 12px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    }
+
+    /* Hover state */
+    .task-checkbox:hover {
+    border-color: #999;
+    }
+
+    /* Focus state for accessibility */
+    .task-checkbox:focus {
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
+    }
+
+    .task-sidebar {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 450px;
+    background-color: white;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+    z-index: 1000;
+    overflow-y: auto;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    }
+
+    .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background-color: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+    }
+
+    .sidebar-header h3 {
+    margin: 0;
+    font-size: 18px;
+    }
+
+    .close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    }
+
+    .sidebar-content {
+    padding: 15px;
+    flex: 1;
+    overflow-y: auto;
+    }
+
+    .main-content {
+    transition: margin-right 0.3s ease;
+    }
+
+    .main-content.with-sidebar {
+    margin-right: 350px;
+    }
+</style>
+
+@code {
+    public List<Models.Tasks> tasks = new();
+    private bool IsBusy { get; set; } = false;
+    private bool IsLoading { get; set; } = false;
+    public Models.Tasks newTask = new();
+
+    private Models.Tasks? ExistingTask;
+    [Parameter]
+    public int Id { get; set; }
+    private RadzenDataGrid<Models.Tasks> grid;
+
+
+    private int? SelectedNotifierTime;
+    private string NotifierEmail = "";
+    // private List<Models.Sprint> AllSprints;
+    private List<Models.Status>? AllStatus;
+    private List<Models.Priority>? AllPriorities;
+    private List<Models.SubTask> NewSubtasks { get; set; } = new List<Models.SubTask>();
+    private List<Models.NotifierOption> NotifierOptions = new List<Models.NotifierOption>
+    {
+        new Models.NotifierOption { DisplayText = "before .5 hour", Value = 2 },
+        new Models.NotifierOption { DisplayText = "before 1 hours", Value = 3 },
+        new Models.NotifierOption { DisplayText = "before 2 hours", Value = 4 }
+    };
+
+    // private Models.Tasks selectedTask;
+    private bool showSidebar = false;
+
+    protected async override Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+    public async Task LoadData()
+    {
+        try
+        {
+            IsBusy = true;
+            IsLoading = true;
+            tasks = await _service.GetInMyDayTasks();
+            AllPriorities = _context.Priority.ToList();
+            AllStatus = _context.Status.ToList();
+        }
+        catch (InvalidDataException iex)
+        {
+            Console.WriteLine($"Invalid data exception: {iex.Message}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Invalid data exception: {ex.Message}");
+            throw;
+        }
+        finally
+        {
+            IsBusy = false;
+            IsLoading = false;
+        }
+
+    }
+    public async Task AddTodo()
+    {
+        try
+        {
+
+            IsLoading = true;
+            IsBusy = true;
+            newTask.InMyDay = true;
+            newTask.TaskId = 0;
+            newTask.CreatedAt = DateTime.Now;
+            newTask.Deadline = DateTime.Today;
+            await _service.Add(newTask);
+            await LoadData();
+        }
+        catch (InvalidDataException iex)
+        {
+            var message = new NotificationMessage()
+                {
+                    Summary = "Add Task Failed",
+                    Detail = iex.Message,
+                    Duration = 3000,
+                    Severity = NotificationSeverity.Error,
+                };
+            _NotificationService.Notify(message);
+        }
+        catch (Exception ex)
+        {
+            var message = new NotificationMessage()
+                {
+                    Detail = ex.Message,
+                    Summary = "Add Task Failed",
+                    Duration = 4000,
+                    Severity = NotificationSeverity.Error
+                };
+            _NotificationService.Notify(message);
+        }
+        finally
+        {
+            IsLoading = false;
+            IsBusy = false;
+        }
+    }
+
+    private async Task MyDayToggle(Models.Tasks task)
+    {
+        if (task.InMyDay)
+        {
+            task.InMyDay = false;
+        }
+        else
+        {
+            task.InMyDay = true;
+        }
+        await _service.UpdateMyDayTasksStatus(task);
+        StateHasChanged();
+        // if (task.InMyDay ? task.InMyDay == false : task.InMyDay) ;
+    }
+
+
+    private async Task ToggleTaskCompletion(Models.Tasks task)
+    {
+        try
+        {
+            if (task.Deadline == null)
+            {
+                if (task.TaskCompletionStatus == "Submitted Within Deadline" || task.TaskCompletionStatus == "Submitted After Deadline")
+                {
+                    //     bool? IsConfirmed = await _DialogService.Confirm
+                    //     (
+                    //         "are you sure you want to incomplete this task",
+                    //         "Incomplete Task",
+                    //         new ConfirmOptions(){
+                    //             OkButtonText = "Incomplete",
+                    //             CancelButtonText = "Back"
+                    //         }
+                    //     );
+
+                    task.TaskCompletionStatus = "Working On";
+                    task.SubmittedAt = DateTime.Now;
+                    task.LastUpdated = DateTime.Now;
+                }
+                // }
+                else
+                {
+                    task.TaskCompletionStatus = "Submitted Within Deadline";
+                    task.SubmittedAt = DateTime.Now;
+                    var message = new NotificationMessage
+                        {
+                            Detail = "Task Completed Successfully ✅",
+                            Duration = 5000,
+                            Severity = NotificationSeverity.Success
+                        };
+                    _NotificationService.Notify(message);
+                }
+            }
+            else
+            {
+                var DaysLeft = (task.Deadline - DateTime.Now).Value.Days;
+
+                if (task.TaskCompletionStatus == "Submitted Within Deadline" || task.TaskCompletionStatus == "Submitted After Deadline")
+                {
+                    // bool? IsConfirmed = await _DialogService.Confirm
+                    // (
+                    //     "do you want to Incomplete this task ?",
+                    //     "Incomplete task",
+                    //     new ConfirmOptions()
+                    //         {
+                    //             OkButtonText = "Incomplete",
+                    //             CancelButtonText = "Back"
+                    //         }
+
+                    // );
+                    // if (IsConfirmed == true)
+                    // {
+                    task.TaskCompletionStatus = "Working On";
+                    task.SubmittedAt = null;
+                    task.LastUpdated = DateTime.Now;
+                    var message = new NotificationMessage()
+                        {
+                            Detail = "Task UnCompleted",
+                            Duration = 4000,
+                            Summary = "This Task Is InCompleted",
+                            Severity = NotificationSeverity.Info
+                        };
+                    _NotificationService.Notify(message);
+                    //}
+                }
+                else
+                {
+                    if (DaysLeft >= 0)
+                    {
+                        task.TaskCompletionStatus = "Submitted Within Deadline";
+                        var message = new NotificationMessage
+                            {
+                                Detail = "Task Completed Successfully Within Deadline ✅",
+                                Duration = 5000,
+                                Severity = NotificationSeverity.Success
+                            };
+                        _NotificationService.Notify(message);
+
+                    }
+                    else
+                    {
+                        task.TaskCompletionStatus = "Submitted After Deadline";
+                    }
+
+                    task.SubmittedAt = DateTime.Now;
+                }
+
+                task.LastUpdated = DateTime.Now;
+            }
+
+            await _service.UpdateTaskStatus(task);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            var message = new NotificationMessage
+                {
+                    Severity = NotificationSeverity.Error,
+                    Summary = "Validation Error",
+                    Detail = ex.Message,
+                    Duration = 3000
+                };
+            _NotificationService.Notify(message);
+        }
+        // finally{
+        //     await LoadData();
+        // }
+    }
+    private async Task ToggleTaskImportance(Models.Tasks task)
+    {
+        if (task.PriorityId != 1)
+        {
+            task.PriorityId = 1;
+            var message = new NotificationMessage()
+                {
+                    Detail = "task marked as important",
+                    Duration = 3500
+                };
+            _NotificationService.Notify(message);
+        }
+        else
+        {
+            var message = new NotificationMessage()
+                {
+                    Detail = "task important removed",
+                    Duration = 3500
+                };
+            _NotificationService.Notify(message);
+            task.PriorityId = null;
+        }
+        await _service.ToggleTaskAsImportant(task);
+        StateHasChanged();
+    }
+    private async void TaskInfo(int taskId)
+    {
+        ExistingTask = await _service.GetById(taskId);
+        showSidebar = true;
+        StateHasChanged();
+        // _NavigationManager.NavigateTo($"/UpdateTask/{taskId}");
+    }
+
+    private void CloseSidebar()
+    {
+        showSidebar = false;
+        StateHasChanged();
+    }
+
+    void AddNewSubtask()
+    {
+
+        NewSubtasks?.Add(new Models.SubTask { SubTaskName = "" });
+    }
+    void RemoveNewSubtask(Models.SubTask subtask)
+    {
+        NewSubtasks?.Remove(subtask);
+    }
+    private async Task DeleteExistingSubTask(int id)
+    {
+        try
+        {
+            bool? IsConfirmed = await _DialogService.Confirm
+            (
+                "Are you sure you want to delete this subtask?",
+                "delete task",
+                new ConfirmOptions()
+                    {
+                        OkButtonText = "Delete",
+                        CancelButtonText = "cancle",
+                    }
+            );
+            Console.WriteLine($"Confirm result: {IsConfirmed}");
+            StateHasChanged();
+            if (IsConfirmed == true)
+            {
+                await _SubTaskService.Delete(id);
+                var message = new NotificationMessage
+                    {
+                        Detail = "task deleted",
+                        Summary = "task deleted successfully",
+                        Duration = 3000
+                    };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Delete failed: {ex.InnerException}");
+            throw;
+        }
+    }
+    private string ButtonColor(Models.Tasks task)
+    {
+        if (task.IsCompletedAfterSDeadline == false && task.IsCompletedWithinSDeadline == false)
+        {
+            return "ButtonStyle.Success";
+
+        }
+        else return "ButtonStyle.Danger";
+    }
+    private async Task DeleteTask(Models.Tasks task)
+    {
+        try
+        {
+            bool? IsConfirmed = await _DialogService.Confirm
+            (
+                "Are you sure you want to delete this task?",
+                "delete task",
+                new ConfirmOptions()
+                    {
+                        OkButtonText = "Delete",
+                        CancelButtonText = "cancle",
+                    }
+            );
+            Console.WriteLine($"Confirm result: {IsConfirmed}");
+            StateHasChanged();
+
+            if (IsConfirmed == true)
+            {
+                await _service.Delete(task.TaskId);
+                showSidebar = false;
+                StateHasChanged();
+                var message = new NotificationMessage
+                    {
+                        Detail = "task deleted",
+                        Summary = "task deleted successfully",
+                        Duration = 3000,
+                        Severity = NotificationSeverity.Warning
+
+                    };
+                // _NavigationManager.NavigateTo("/alltasks");
+
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Delete failed: {ex.Message}");
+            throw;
+        }
+        finally
+        {
+            await LoadData();
+        }
+    }
+
+    public async Task UpdateTask()
+    {
+        try
+        {
+            if (ExistingTask == null) Console.WriteLine("task is null");
+            ExistingTask.LastUpdated = DateTime.Now;
+
+            if (NewSubtasks.Any())
+            {
+                foreach (var subtask in NewSubtasks)
+                {
+                    subtask.SubTaskId = 0;
+                    subtask.TaskId = ExistingTask.TaskId;
+                    await _SubTaskService.Add(subtask);
+                }
+                NewSubtasks.Clear();
+
+            }
+            await _service.Update(ExistingTask);
+
+            var message = new NotificationMessage
+                {
+                    Summary = "Changes Saved",
+                    Detail = "Changes Saved Successfully",
+                    Duration = 4000,
+                    Severity = NotificationSeverity.Success
+                };
+            _NotificationService.Notify(message);
+
+            // await _IJSRuntime.InvokeVoidAsync("playSuccessSound");
+            // await Task.Delay(500);
+            // _NavigationManager.NavigateTo("/alltasks");
+        }
+        catch (InvalidDataException iex)
+        {
+            var message = new NotificationMessage
+                {
+                    Summary = "validation error",
+                    Detail = iex.Message,
+                    Duration = 3000,
+                    Severity = NotificationSeverity.Error
+                };
+            _NotificationService.Notify(message);
+            // throw;
+        }
+        catch (Exception ex)
+        {
+            var message = new NotificationMessage
+                {
+                    Summary = "Vaildation error",
+                    Detail = ex.Message,
+                    Duration = 3000,
+                    Severity = NotificationSeverity.Error
+                };
+            _NotificationService.Notify(message);
+        }
+        finally
+        {
+            IsBusy = false;
+            IsLoading = false;
+        }
+    }
+    private async Task UpdateRow(Models.Tasks task)
+    {
+        await _service.Update(task);
+    }
+    private void StartEdit(Models.Tasks task)
+    {
+        grid.EditRow(task);
+    }
+}

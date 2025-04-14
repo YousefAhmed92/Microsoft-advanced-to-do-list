@@ -1,0 +1,83 @@
+﻿@page "/Registeration"
+@inject NavigationManager _NavigationManager
+@inject Services.AccountService _service;
+@inject NotificationService _NotificationService;
+@using Radzen;
+@using Radzen.Blazor;
+<h4>Registeration Form</h4>
+<EditForm Model="@NewUser" OnValidSubmit="RegisterNewUser" FormName="Registeration">
+    <RadzenCard>
+        <RadzenRow Style="margin-top:15px">
+            <RadzenColumn>
+                <RadzenLabel Text="Username" /> <br />
+                <RadzenTextBox Placeholder="username" @bind-Value="NewUser.UserName" />
+            </RadzenColumn>
+        </RadzenRow>
+
+        <RadzenRow Style="margin-top:15px">
+            <RadzenColumn>
+            <RadzenLabel Text="Email" /> <br />
+            <RadzenTextBox Placeholder="Email" @bind-Value="NewUser.UserEmail" />
+            </RadzenColumn>
+        </RadzenRow>
+
+        <RadzenRow Style="margin-top:15px">
+            <RadzenColumn>
+            <RadzenLabel Text=" Password" /> <br />
+            <RadzenPassword Placeholder="Password" @bind-Value="NewUser.UserPassword" />
+            </RadzenColumn>
+        </RadzenRow>
+        <RadzenRow Style="margin-top:15px">
+            <RadzenColumn>
+                <RadzenLabel Text="Confirm Password" /> <br />
+                <RadzenPassword Placeholder="Confirm Password" @bind-Value="NewUser.UserConfirmPassword" />
+            </RadzenColumn>
+        </RadzenRow>
+        <RadzenRow Style="margin-top:20px">
+            <RadzenButton Text="Create Account" ButtonStyle="ButtonStyle.Success" ButtonType="ButtonType.Submit" />
+            <RadzenButton Text="Have an Account" ButtonStyle="ButtonStyle.Secondary" Click="@HaveAnAccount" />
+        </RadzenRow>
+    </RadzenCard>
+</EditForm>
+
+@code {
+    public Models.User NewUser = new();
+
+    public async Task RegisterNewUser()
+    {
+        try
+        {
+            var user = await _service.Registration(NewUser, NewUser.UserPassword);
+            if (user != null)
+            {
+                _NavigationManager.NavigateTo("/Main");
+            }
+        }
+        catch(InvalidDataException iex)
+        {
+            var message = new NotificationMessage
+                {
+                    Summary = iex.Message,
+                    Detail = "Registeration Failed",
+                    Duration = 5000,
+                    Severity = NotificationSeverity.Error
+                };
+                 _NotificationService.Notify(message);
+        }
+        catch (Exception ex)
+        {
+            var message = new NotificationMessage
+                {
+                    Summary = ex.Message,
+                    Detail = "Registeration Failed",
+                    Duration = 5000,
+                    Severity = NotificationSeverity.Error
+                };
+            _NotificationService.Notify(message);
+        }
+    }
+    public void HaveAnAccount()
+    {
+        _NavigationManager.NavigateTo("/");
+    }
+}

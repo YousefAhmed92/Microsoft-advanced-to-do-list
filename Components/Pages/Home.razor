@@ -1,0 +1,172 @@
+﻿ @page "/" 
+@inject NavigationManager _NavigationManager
+@inject Services.AccountService _service ;
+@inject NotificationService _NotificationService
+@using Radzen;
+@using Radzen.Blazor;
+<EditForm Model="@NewUser" OnValidSubmit="LoginUser" FormName="Login">
+    <RadzenCard>
+        <h3 style="text-align:center">Welcome Back!</h3>
+
+        <RadzenRow Style="margin-top:15px">
+            <RadzenColumn SizeMD="6">
+                <RadzenLabel Text="Email" /> <br />
+                <RadzenTextBox Placeholder="Email" @bind-Value="NewUser.UserEmail" />
+            </RadzenColumn>
+        </RadzenRow>
+        <RadzenRow Style="margin-top:15px">
+            <RadzenColumn SizeMD="6">
+                <RadzenLabel Text="Password" /> <br />
+                <RadzenPassword Placeholder="Password" @bind-Value="NewUser.UserPassword" />
+            </RadzenColumn>
+        </RadzenRow>
+        <RadzenRow Style="margin-top:15px">
+            <RadzenButton Text="Login" ButtonStyle="ButtonStyle.Primary" ButtonType="ButtonType.Submit" />
+            <RadzenButton Text="create new Account" ButtonStyle="ButtonStyle.Base" Click="@NavigateToRegistrationPage" />
+            <RadzenButton Text="Forget My Password" ButtonStyle="ButtonStyle.Secondary" Click="@NavigateToForgetPasswordPage" />
+
+        </RadzenRow>
+
+    </RadzenCard>
+</EditForm>
+
+
+@code
+{
+    string email;
+    string password;
+    public Models.User NewUser = new();
+
+    public async Task LoginUser()
+    {
+        // Validate locally before making any server-side calls
+        // if (string.IsNullOrWhiteSpace(NewUser.UserEmail))
+        // {
+        //     _NotificationService.Notify(new NotificationMessage
+        //         {
+        //             Detail = "Email is required",
+        //             Summary = "Login Faileddddddd",
+        //             Duration = 5000
+        //         });
+        //     return;
+        // }
+
+        // if (string.IsNullOrWhiteSpace(NewUser.UserPassword))
+        // {
+        //     _NotificationService.Notify(new NotificationMessage
+        //         {
+        //             Detail = "Password is required",
+        //             Summary = "Login Failedddddd",
+        //             Duration = 5000
+        //         });
+        //     return;
+        // }
+
+        try
+        {
+            var user = await _service.Login(NewUser.UserEmail, NewUser.UserPassword);
+            _NavigationManager.NavigateTo("/Main");
+        }
+        catch (InvalidDataException iex)
+        {
+            var message = new NotificationMessage
+                {
+                    Detail = iex.Message,
+                    Summary = "Login Failed",
+                    Duration = 5000,
+                    Severity = NotificationSeverity.Error
+
+                };
+            _NotificationService.Notify(message);
+        }
+        catch (Exception ex)
+        {
+            var message = new NotificationMessage
+                {
+                    Detail = ex.Message,
+                    Summary = "Login Failed",
+                    Duration = 5000,
+                    Severity = NotificationSeverity.Error
+
+                };
+            _NotificationService.Notify(message);
+
+        }
+    }
+
+    public void NavigateToRegistrationPage()
+    {
+        _NavigationManager.NavigateTo("/Registeration");
+    }
+    public void NavigateToForgetPasswordPage()
+    {
+        _NavigationManager.NavigateTo("/ForgetPassword");
+    }
+
+}
+
+
+@* @inject IJSRuntime JS *@
+@* @inject NavigationManager _NavigationManager *@
+
+@* <RadzenStack class="rz-p-0 rz-p-md-12"> *@
+@*     <RadzenCard class="rz-p-4" Variant="Variant.Outlined"> *@
+@*         <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Start" Wrap="FlexWrap.Wrap"> *@
+@*             <RadzenStack Orientation="Orientation.Vertical" Gap="4px"> *@
+@*                 <RadzenLabel Text="Card Variant:" /> *@
+@*                 <RadzenSelectBar @bind-Value="@variant" TextProperty="Text" ValueProperty="Value" Data="@(Enum.GetValues(typeof(Variant)).Cast<Variant>().Select(t => new { Text = $"{t}", Value = t }))" Size="ButtonSize.Small" class="rz-display-none rz-display-xl-flex" /> *@
+@*                 <RadzenDropDown @bind-Value="@variant" TextProperty="Text" ValueProperty="Value" Data="@(Enum.GetValues(typeof(Variant)).Cast<Variant>().Select(t => new { Text = $"{t}", Value = t }))" class="rz-display-inline-flex rz-display-xl-none" /> *@
+@*             </RadzenStack> *@
+@*             <RadzenStack Orientation="Orientation.Vertical" Gap="4px"> *@
+@*                 <RadzenLabel Text="Responsive:" /> *@
+@*                 <RadzenSwitch @bind-Value="responsive" /> *@
+@*             </RadzenStack> *@
+@*         </RadzenStack> *@
+@*     </RadzenCard> *@
+
+@*     <RadzenCardGroup Responsive="@responsive"> *@
+@*         <RadzenCard Variant="@variant"> *@
+@*             <RadzenButton Text="All Tasks" ButtonStyle="ButtonStyle.Primary" Click="@AllTasks" /> *@
+
+@*         </RadzenCard> *@
+@*         <RadzenCard Variant="@variant"> *@
+@*             <RadzenButton Text="Important Tasks" ButtonStyle="ButtonStyle.Primary" Click="@ImportantTasks" /> *@
+
+@*         </RadzenCard> *@
+@*         <RadzenCard Variant="@variant"> *@
+@*             <RadzenButton Text="Completed Tasks" ButtonStyle="ButtonStyle.Primary" Click="@Completedasks" /> *@
+
+@*         </RadzenCard> *@
+@*     </RadzenCardGroup> *@
+@* </RadzenStack> *@
+
+@* @code { *@
+@*     bool responsive = true; *@
+
+@*     Variant variant = Variant.Filled; *@
+
+@*     double teamOneProgress = 55; *@
+@*     double teamTwoProgress = 32; *@
+@*     double teamThreeProgress = 76; *@
+
+@*     private void AllTasks(){ *@
+@*         _NavigationManager.NavigateTo("/alltasks"); *@
+@*     } *@
+@*     private void ImportantTasks() *@
+@*     { *@
+@*         _NavigationManager.NavigateTo("/Importanttasks"); *@
+@*     } *@
+@*     private void Completedasks() *@
+@*     { *@
+@*         _NavigationManager.NavigateTo("/CompletedTasks"); *@
+@*     } *@
+
+
+
+
+@* } *@
+
+
+
+
+

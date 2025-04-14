@@ -1,0 +1,215 @@
+﻿@inject Services.TaskService _service
+@inject NavigationManager _NavigationManager
+@inject NotificationService _NotificationService ;
+@inject DialogService _DialogService;
+@inject Helper.MyTasksDBContext _context ;
+@inject IJSRuntime _IJSRuntime ;
+@inject Services.SubTaskService _SubTaskService
+@inject Services.ListService _ListService;
+
+@using Radzen.Blazor;
+@using Radzen;
+
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">MyTasks01</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="Main" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="InMyDayTasks">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> InMyDayTasks
+
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="alltasks">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> All Tasks @allTasks
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="CompletedTasks">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Completed Tasks
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="Importanttasks">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Important Tasks
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="reminders">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> reminders
+            </NavLink>
+        </div>
+        <div>
+            @foreach (var list in allLists.ToList())
+            {
+                <a class="lists" @onclick="(() => listinfo(list.Id))">
+                    <h5 style="color:white">@list.Name</h5>
+                </a>
+            }
+
+        </div>
+        <div>
+            <EditForm FormName="AddTask" Model="@newList" OnValidSubmit="AddList" style="margin-top: 10px">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                @* <RadzenStack> *@
+                @*     <RadzenCard> *@
+                <RadzenRow Style="margin:5px">
+
+                    @* <RadzenColumn SizeMD="1"> *@
+                    @*     <RadzenLabel Text="task name" /> *@
+                    @* </RadzenColumn> *@
+
+                    <RadzenColumn SizeMD="3">
+                        <RadzenTextBox @bind-Value="newList.Name">
+                            <RadzenRequiredValidator />
+                        </RadzenTextBox>
+                    </RadzenColumn>
+
+                    @* <RadzenColumn SizeMD="3"> *@
+                    @*     <RadzenButton ButtonType="ButtonType.Submit"  *@
+                    @*     Text="Add Task" *@
+                    @*     Icon="add_circle" *@
+                    @*     ButtonStyle="ButtonStyle.Primary"  *@
+                    @*     Style="width: 100%;"> *@
+                    @*     </RadzenButton> *@
+                    @* </RadzenColumn> *@
+                </RadzenRow>
+
+                @*     </RadzenCard> *@
+                @* </RadzenStack> *@
+            </EditForm>
+        </div>
+
+    </nav>
+</div>
+<style>
+    .lists {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    color: white;
+    text-decoration: none;
+    font-size: 16px;
+    transition: background 0.3s ease-in-out;
+    border-radius: 5px;
+    }
+
+    .lists:hover {
+    background: rgba(255, 255, 255, 0.2);
+    }
+
+    .lists h5 {
+    margin: 0;
+    font-weight: normal;
+    text-transform: capitalize;
+    }
+
+    .lists svg {
+    margin-right: 10px;
+    font-size: 18px;
+    }
+
+
+</style>
+
+@code
+{
+    private int  allTasks;
+
+
+    private List<Models.Lists> allLists { get; set; } = new List<Models.Lists>();
+
+    public Models.Lists newList  = new ();
+    public Models.Lists? ExistingList;
+
+    [Parameter]
+    public int Id { get; set; }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            allLists = await _ListService.GetAll();
+            allTasks = _context.Task.Count();
+            StateHasChanged();
+        }
+        catch(Exception ex)
+        {
+            throw;
+        }
+    }
+
+
+    // protected override void OnInitialized()
+    // {
+    //     newList = new Models.Lists(); 
+    // }
+
+    public async Task AddList()
+    {
+        try
+        {
+            newList.Id = 0;
+            await Task.Delay(500);
+            await _ListService.Add(newList);
+
+        }
+        catch(InvalidCastException iex)
+        {
+            var message = new NotificationMessage()
+                {
+                    Duration = 3000,
+                    Detail = iex.Message,
+                    Summary = "failed add new list"
+                };
+            _NotificationService.Notify(message);
+        }
+        catch(Exception ex)
+        {
+            Console.WriteLine(ex.InnerException);
+            throw;
+            // var message = new NotificationMessage()
+            //     {
+            //         Duration = 3000,
+            //         Detail = ex.Message,
+            //         Summary = "failed add new list"
+            //     };
+            // _NotificationService.Notify(message);
+        }
+        finally
+        {
+            await LoadData();
+        }
+    }
+
+    public async Task listinfo(int id)
+    {
+        ExistingList = await _ListService.GetById(id);
+        StateHasChanged();
+        _NavigationManager.NavigateTo($"/List/{id}");
+    }
+}

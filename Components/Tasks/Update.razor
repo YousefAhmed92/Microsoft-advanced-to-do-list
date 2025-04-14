@@ -1,0 +1,584 @@
+﻿@page "/UpdateTask/{Id:int}"
+@inject Services.TaskService _service;
+@inject NavigationManager _NavigationManager;
+@inject NotificationService _NotificationService
+@inject Helper.MyTasksDBContext _context ;
+@inject DialogService _DialogService
+@inject IJSRuntime _IJSRuntime ;
+@inject Services.SubTaskService _SubTaskService
+@using Radzen;
+@using Radzen.Blazor;
+
+
+
+@if (ExistingTask == null)
+{
+    <RadzenAlert Style="margin: 20px">
+        <RadzenIcon Icon="warning" Style="margin-right: 10px" />
+        Task not found or loading...
+    </RadzenAlert>
+}
+
+else
+{
+
+    <EditForm FormName="updatetask" Model="@ExistingTask" OnValidSubmit="UpdateTask">
+        <ValidationSummary />
+        <DataAnnotationsValidator />
+        <RadzenCard>
+            <RadzenRow Style="margin:10px">
+                <RadzenColumn SizeMD="4">
+                    <RadzenLabel Text="task name : " /> <br />
+                    <RadzenTextBox @bind-Value="ExistingTask.TaskName" />
+                </RadzenColumn>
+                <RadzenColumn SizeMD="4">
+                    <RadzenLabel Text="task description : " /><br />
+                    <RadzenTextBox @bind-Value="ExistingTask.TaskDescription" />
+                </RadzenColumn>
+                <RadzenColumn SizeMD="4" Style="margin-left = 90px">
+                    <br />
+                    @if (ExistingTask.IsCompletedAfterSDeadline == false && ExistingTask.IsCompletedWithinSDeadline == false)
+                    {
+
+                        <RadzenButton Text="Mark Complete"
+                        ButtonStyle="ButtonStyle.Success"
+                        Click="@(() => ToggleTaskCompletion(ExistingTask))"
+                        Style="margin-left:10px" />
+                    }
+                    else
+                    {
+                        <RadzenButton Text="Mark Incomplete"
+                        ButtonStyle="ButtonStyle.Secondary"
+                        Click="@(() => ToggleTaskCompletion(ExistingTask))"
+                        Style="margin-left:10px" />
+                    }
+
+                </RadzenColumn>
+            </RadzenRow>
+
+            <RadzenRow Style="margin:10px">
+                <RadzenColumn SizeMD="4">
+                    <RadzenLabel Text="task deadline : " /><br />
+                    <RadzenDatePicker @bind-Value="ExistingTask.Deadline" />
+                </RadzenColumn>
+                <RadzenColumn SizeMD="4">
+                    <RadzenLabel Text="task status : " /><br />
+                    @if (AllStatus != null && AllStatus.Any())
+                    {
+                        <RadzenDropDown Data="@AllStatus"
+                        AllowFiltering="true" AllowClear="true"
+                        @bind-Value="ExistingTask.StatusId"
+                        TextProperty="StatusName"
+                        ValueProperty="StatusId"
+                        Placeholder="Select Status" />
+                    }
+                    else
+                    {
+                        <p>Loading statuses...</p>
+                    }
+                </RadzenColumn>
+
+            </RadzenRow>
+
+            <RadzenRow Style="margin:10px">
+                <RadzenColumn SizeMD="4">
+                    <RadzenLabel Text="task Priorities : " /><br />
+                    <RadzenDropDown Data="@AllPriorities"
+                    AllowClear="true" AllowFiltering="true"
+                    @bind-Value="ExistingTask.PriorityId"
+                    TextProperty="PriorityName"
+                    ValueProperty="PriorityId"
+                    Placeholder="select priority" />
+                </RadzenColumn>
+                <RadzenColumn SizeMD="4">
+                    <RadzenLabel Text="task Notifier : " /><br />
+                    <RadzenDropDown Data="@NotifierOptions"
+                    AllowClear="true"
+                    AllowFiltering="true"
+                    @bind-Value="ExistingTask.NotifierInHours"
+                    TextProperty="DisplayText"
+                    ValueProperty="Value"
+                    Placeholder="Select notifier time" />
+                </RadzenColumn>
+                @* <RadzenColumn SizeMD="4"> *@
+                @*     <RadzenLabel Text="task email : " /><br /> *@
+                @*     <RadzenTextBox @bind-Value="ExistingTask.Email" /> *@
+                @* </RadzenColumn> *@
+            </RadzenRow>
+
+            <RadzenRow Style="margin:10px">
+                <RadzenColumn SizeMD="4">
+                </RadzenColumn>
+            </RadzenRow>
+
+            @* <RadzenRow Style="margin:10px"> *@
+            @*     <RadzenColumn SizeMD="4"> *@
+            @*         <RadzenLabel Text="task sprint : " /> <br /> *@
+            @*         <RadzenDropDown Data="@AllSprints" *@
+            @*         AllowClear="true" *@
+            @*         AllowFiltering="true" *@
+            @*         @bind-Value="ExistingTask.SprintId" *@
+            @*         TextProperty="SprintName" *@
+            @*         ValueProperty="SprintId" *@
+            @*         Placeholder="Select sprint time" /> *@
+            @*     </RadzenColumn> *@
+            @* </RadzenRow> *@
+
+            <RadzenRow Style="margin:10px">
+                <RadzenColumn SizeMD="12">
+                    <RadzenLabel  />
+                    @if (ExistingTask?.Subtasks != null && ExistingTask.Subtasks.Any())
+                    {
+                        @foreach (var subtask in ExistingTask.Subtasks.ToList())
+                        {
+                            <RadzenRow Style="margin:5px">
+                                <RadzenColumn SizeMD="12">
+                                    <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Click="() => DeleteExistingSubTask(subtask.SubTaskId)" />
+                                    <RadzenTextBox @bind-Value="subtask.SubTaskName" />
+                                </RadzenColumn>
+                            </RadzenRow>
+                        }
+                    }
+                    @foreach (var subtask in NewSubtasks)
+                    {
+                        <RadzenRow Style="margin:5px">
+                            <RadzenColumn SizeMD="8">
+                                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Secondary" Click="() => RemoveNewSubtask(subtask)" />
+                                <RadzenTextBox @bind-Value="subtask.SubTaskName" />
+                            </RadzenColumn>
+                        </RadzenRow>
+                    }
+                    <RadzenButton Text="Add Subtask" ButtonStyle="ButtonStyle.Primary" Click="AddNewSubtask" Style="margin-top:10px" />
+                </RadzenColumn>
+            </RadzenRow>
+            <div class="form-footer" style="margin-top:50px; text-align:center" >
+                <RadzenButton ButtonType="ButtonType.Submit"
+                Text="Save Changes"
+                Icon="save"
+                ButtonStyle="ButtonStyle.Primary"
+                IsBusy="@IsBusy"
+                Disabled="@IsBusy" />
+
+                <RadzenButton Text="Back"
+                ButtonStyle="ButtonStyle.Base"
+                Click="@(() => _NavigationManager.NavigateTo("/alltasks"))"
+                Style="margin-left:10px" />
+
+                <RadzenButton Text="Delete Task"
+                ButtonStyle="ButtonStyle.Secondary"
+                Icon="delete"
+                Click="@DeleteTask"
+                Style="margin-left:10px" />
+            </div>
+        </RadzenCard>
+    </EditForm>
+    <div class="container">
+        <p id="countdown" class="countclass"></p>
+
+    </div>
+
+}
+<script>
+    function startCountdown(deadline)
+    {
+    let countDownDate = new Date(deadline).getTime();
+
+    let x = setInterval(function() {
+    let now = new Date().getTime();
+    let distance = countDownDate - now;
+
+    if (distance <= 0)
+    {
+    clearInterval(x);
+    document.getElementById("countdown").innerHTML = "Time's up!";
+    return;
+    }
+    let days = Math.floor(distance / (1000 * 60 * 60 * 24)); 
+    let hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)); 
+    let minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)); 
+    let seconds = Math.floor((distance % (1000 * 60)) / 1000); 
+
+
+    document.getElementById("countdown").innerHTML = "Task Will end after " + days + " Days " + " : " + hours + " Hours" + " : " + minutes + " Minutes" + " : " + seconds + " Seconds";
+    }, 500);
+    }
+</script>
+
+@* <script> *@
+@*     function playSuccessSound() { *@
+
+@*             import sound from '../sound/successed-295058.mp3' ; *@
+@*             const audio = new Audio(sound) ; *@
+@*             audio.crossOrigin = 'anonymous' ; *@
+@*             audio.play() *@
+
+
+@*         // var audio = new Audio("/sound/successed-295058.mp3"); *@
+@*         // audio.preload = "auto"; Preload the audio for faster access *@
+@*         // audio.load(); Ensure it loads before playing *@
+@*         // audio.play() *@
+@*         //     .then(() => console.log("Audio playback started")) *@
+@*         //     .catch(error => { *@
+@*         //         console.error("Audio playback error:", error); *@
+@*         //         alert("Audio failed to play: " + error.message); *@
+@*         //     }); *@
+@*     }; *@
+
+@* </script> *@
+<p id="countdown" class="countclass"></p>
+
+<style>
+    .container{
+    color: black;
+    font-weight:500;
+    font-size : 1.1rem;
+    height:75px;
+    text-align: center;
+    padding: 8px;
+    border-radius: 10px;
+    margin-top: 20px
+
+    }
+    /* .countclass{ */
+    /* width: 150px; */
+    /* height: 150px; */
+    /* font-weight : bolder; */
+    /* bac */
+    /* } */
+</style>
+@code
+{
+
+
+    private Models.Tasks? ExistingTask;
+    [Parameter]
+    public int Id { get; set; }
+    private bool IsBusy { get; set; } = false;
+    private bool IsLoading { get; set; } = false;
+    private bool showNotifierDialog = false;
+    private int? SelectedNotifierTime;
+    private string NotifierEmail = "";
+    // private List<Models.Sprint> AllSprints;
+    private List<Models.Status>? AllStatus;
+    private List<Models.Priority>? AllPriorities;
+    private List<Models.SubTask> NewSubtasks { get; set; } = new List<Models.SubTask>();
+    private List<Models.NotifierOption> NotifierOptions = new List<Models.NotifierOption>
+    {
+        new Models.NotifierOption { DisplayText = "before .5 hour", Value = 2 },
+        new Models.NotifierOption { DisplayText = "before 1 hours", Value = 3 },
+        new Models.NotifierOption { DisplayText = "before 2 hours", Value = 4 }
+    };
+    // private List<Models.SprintTime> SprintTime = new List<Models.SprintTime>
+    // {
+    //     new Models.SprintTime { DisplayText = "3 days sprint", Value = 1 },
+    //     new Models.SprintTime { DisplayText = "1 week sprint ", Value = 24 },
+    //     new Models.SprintTime { DisplayText = "2 weeks sprint", Value = 48 }
+    // };
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && ExistingTask?.Deadline != null)
+        {
+            await _IJSRuntime.InvokeVoidAsync("startCountdown", ExistingTask.Deadline.Value.ToString("yyyy-MM-ddTHH:mm:ss"));
+        }
+    }
+    public async Task LoadData()
+    {
+        try
+        {
+            AllStatus = _context.Status.ToList();
+            AllPriorities = _context.Priority.ToList();
+            ExistingTask = await _service.GetById(Id);
+            if (ExistingTask is null) throw new Exception("not found");
+        }
+        catch(Exception ex)
+        {
+            Console.WriteLine($" data exception {ex.Message}");
+            throw;
+        }
+        finally
+        {
+            IsBusy = false;
+            IsLoading = false;
+        }
+    }
+    public async Task UpdateTask()
+    {
+        try 
+        {
+            if (ExistingTask == null) Console.WriteLine("task is null");
+            ExistingTask.LastUpdated = DateTime.Now;
+
+            if (NewSubtasks.Any())
+            {
+                foreach (var subtask in NewSubtasks)
+                {
+                    subtask.SubTaskId = 0;
+                    subtask.TaskId = ExistingTask.TaskId;
+                    await _SubTaskService.Add(subtask);
+                }
+                NewSubtasks.Clear();
+
+            }
+            await _service.Update(ExistingTask);
+
+            var message = new NotificationMessage
+                {
+                    Summary = "Changes Saved",
+                    Detail = "Changes Saved Successfully",
+                    Duration = 4000,
+                    Severity = NotificationSeverity.Success
+                };
+            _NotificationService.Notify(message);
+
+            // await _IJSRuntime.InvokeVoidAsync("playSuccessSound");
+            // await Task.Delay(500);
+            // _NavigationManager.NavigateTo("/alltasks");
+        }
+        catch (InvalidDataException iex)
+        {
+            var message = new NotificationMessage
+                {
+                    Summary = "validation error",
+                    Detail = iex.Message,
+                    Duration = 3000,
+                    Severity = NotificationSeverity.Error
+                };
+            _NotificationService.Notify(message);
+            // throw;
+        }
+        catch (Exception ex)
+        {
+            var message = new NotificationMessage
+                {
+                    Summary = "Vaildation error",
+                    Detail = ex.Message,
+                    Duration = 3000,
+                    Severity = NotificationSeverity.Error
+                };
+            _NotificationService.Notify(message);
+        }
+        finally
+        {
+            IsBusy = false;
+            IsLoading = false;
+        }
+    }
+
+
+
+    private async Task ToggleTaskCompletion(Models.Tasks task)
+    {
+        try
+        {
+            var DaysLeft = (task.Deadline - DateTime.Now).Value.Days;
+
+            if (DaysLeft == 0)
+            {
+                if (task.IsCompletedAfterSDeadline == false )
+                {
+                    task.IsCompletedAfterSDeadline = true;
+                    task.SubmittedAt = DateTime.Now;
+                    task.LastUpdated = DateTime.Now;
+
+                }
+
+            }
+
+            if (task.Deadline == null)
+            {
+                if (task.IsCompletedAfterSDeadline == true || task.IsCompletedWithinSDeadline == true)
+                {
+                    bool? IsConfirmed = await _DialogService.Confirm
+                    (
+                        "are you sure you want to incomplete this task",
+                        "Incomplete Task",
+                        new ConfirmOptions()
+                            {
+                                OkButtonText = "Incomplete",
+                                CancelButtonText = "Back"
+                            }
+                    );
+                    if (IsConfirmed == true)
+                    {
+                        task.IsCompletedWithinSDeadline = false;
+                        task.IsCompletedAfterSDeadline = false;
+                        task.SubmittedAt = null;
+                        task.LastUpdated = DateTime.Now;
+                    }
+                }
+                else
+                {
+                    task.IsCompletedWithinSDeadline = true;
+                    task.SubmittedAt = DateTime.Now;
+                    var message = new NotificationMessage
+                        {
+                            Detail = "Task Completed Successfully ✅",
+                            Duration = 5000,
+                            Severity = NotificationSeverity.Success
+                        };
+                    _NotificationService.Notify(message);
+                }
+            }
+            else
+            {
+
+                if (task.IsCompletedWithinSDeadline == true || task.IsCompletedAfterSDeadline == true)
+                {
+                    bool? IsConfirmed = await _DialogService.Confirm
+                    (
+                        "do you want to Incomplete this task ?",
+                        "Incomplete task",
+                        new ConfirmOptions()
+                            {
+                                OkButtonText = "Incomplete",
+                                CancelButtonText = "Back"
+                            }
+
+                    );
+                    if (IsConfirmed == true)
+                    {
+                        task.IsCompletedWithinSDeadline = false;
+                        task.IsCompletedAfterSDeadline = false;
+                        task.SubmittedAt = null;
+                    }
+                }
+                else
+                {
+                    if (DaysLeft >= 0)
+                    {
+                        task.IsCompletedWithinSDeadline = true;
+                        var message = new NotificationMessage
+                            {
+                                Detail = "Task Completed Successfully Within Deadline ✅",
+                                Duration = 5000,
+                                Severity = NotificationSeverity.Success
+
+                            };
+                        _NotificationService.Notify(message);
+                    }
+                    else
+                    {
+                        task.IsCompletedAfterSDeadline = true;
+                    }
+                    task.SubmittedAt = DateTime.Now;
+                }
+                task.LastUpdated = DateTime.Now;
+            }
+            await _service.UpdateTaskStatus(task);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            var message = new NotificationMessage
+                {
+                    Severity = NotificationSeverity.Error,
+                    Summary = "Validation Error",
+                    Detail = ex.Message,
+                    Duration = 3000
+                };
+            _NotificationService.Notify(message);
+        }
+    }
+    private async Task DeleteTask()
+    {
+        try
+        {
+            bool? IsConfirmed = await _DialogService.Confirm
+            (
+                "Are you sure you want to delete this task?",
+                "delete task",
+                new ConfirmOptions()
+                    {
+                        OkButtonText = "Delete",
+                        CancelButtonText = "cancle",
+                    }
+            );
+            Console.WriteLine($"Confirm result: {IsConfirmed}");
+            StateHasChanged();  
+
+            if (IsConfirmed == true)
+            {
+                await _service.Delete(Id);
+                var message = new NotificationMessage
+                {
+                    Detail = "task deleted",
+                    Summary =  "task deleted successfully",
+                    Duration = 3000,
+                    Severity = NotificationSeverity.Warning
+
+                };
+                _NavigationManager.NavigateTo("/alltasks");
+
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Delete failed: {ex.Message}");
+            throw;
+        }
+    }
+    // public string CustomizeButtonStyle(Models.Tasks task)
+    // {
+    //     if (task.IsCompletedAfterSDeadline == true)
+    //         return "Mark InComplete";
+    //     if (task.IsCompletedWithinSDeadline == true)
+    //         return "Mark InComplete";
+    //     else {
+    //         return "Mark Complete";
+    //     }
+    // }
+    void AddNewSubtask()
+    {
+
+        NewSubtasks?.Add(new Models.SubTask { SubTaskName = "" });
+    }
+    void RemoveNewSubtask(Models.SubTask subtask)
+    {
+        NewSubtasks?.Remove(subtask);
+    }
+    private async Task DeleteExistingSubTask(int id)
+    {
+        try
+        {
+            bool? IsConfirmed = await _DialogService.Confirm(
+                "Are you sure you want to delete this subtask?",
+                "delete task",
+                new ConfirmOptions()
+                    {
+                        OkButtonText = "Delete",
+                        CancelButtonText = "cancle",
+                    }
+        );
+            Console.WriteLine($"Confirm result: {IsConfirmed}");
+            StateHasChanged();
+            if (IsConfirmed == true)
+            {
+                await _SubTaskService.Delete(id);
+                var message = new NotificationMessage
+                    {
+                        Detail = "task deleted",
+                        Summary = "task deleted successfully",
+                        Duration = 3000
+                    };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Delete failed: {ex.Message}");
+            throw;
+        }
+    }
+    private string ButtonColor(Models.Tasks task)
+    {
+        if (task.IsCompletedAfterSDeadline == false && task.IsCompletedWithinSDeadline == false)
+        {
+            return "ButtonStyle.Success";
+
+        }
+        else return "ButtonStyle.Danger";
+    }
+}
